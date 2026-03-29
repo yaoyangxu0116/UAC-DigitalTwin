@@ -6,10 +6,8 @@
     <style>
         * { margin: 0; padding: 0; }
         body { width: 100vw; height: 100vh; background: #000; overflow: hidden; }
-        /* 3D画布占80%，科技风面板占20%，仿参考图布局 */
         #container { width: 100%; height: 100%; display: flex; }
         #threeCanvas { flex: 8; background: #051929; }
-        /* 右侧科技风数据面板 */
         #dataPanel { flex: 2; background: #091E32; border-left: 2px solid #00FFFF; padding: 20px; box-sizing: border-box; color: #fff; font-family: "微软雅黑"; }
         .panel-title { text-align: center; font-size: 20px; color: #00FFFF; margin-bottom: 20px; border-bottom: 1px solid #00FFFF; padding-bottom: 10px; }
         .param-item { margin: 15px 0; }
@@ -18,7 +16,6 @@
         #chart1 { width: 100%; height: 200px; margin-top: 30px; }
         #chart2 { width: 100%; height: 200px; margin-top: 20px; }
     </style>
-    <!-- 引入Three.js和ECharts的CDN，不用下载本地文件 -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.154.0/build/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
 </head>
@@ -27,7 +24,6 @@
         <div id="threeCanvas"></div>
         <div id="dataPanel">
             <h2 class="panel-title">水声通信设备孪生监控面板</h2>
-            <!-- 设备核心状态参数 -->
             <div class="param-item">
                 <div class="param-name">设备工作电压 (V)</div>
                 <div class="param-value" id="voltage">220.00</div>
@@ -40,7 +36,6 @@
                 <div class="param-name">水下工作深度 (m)</div>
                 <div class="param-value" id="depth">100.00</div>
             </div>
-            <!-- 信道核心参数（你的论文核心算法输出） -->
             <div class="param-item">
                 <div class="param-name">通信传播损失 (dB)</div>
                 <div class="param-value" id="pl">65.23</div>
@@ -53,44 +48,51 @@
                 <div class="param-name">通信误码率</div>
                 <div class="param-value" id="ber">0.0025</div>
             </div>
-            <!-- 数据图表：传播损失曲线 + 误码率曲线 -->
             <div id="chart1"></div>
             <div id="chart2"></div>
         </div>
     </div>
 
     <script>
-        // 后续所有代码都写在这里：3D建模、仿真数据、信道模型、数据驱动
         window.onload = function() {
-            // 1. Three.js初始化（画布、相机、场景、灯光）
+            // ===================== 1. Three.js 初始化 =====================
             const canvas = document.getElementById('threeCanvas');
             const width = canvas.clientWidth;
             const height = canvas.clientHeight;
+
             // 相机
             const camera = new THREE.PerspectiveCamera(75, width/height, 0.1, 1000);
             camera.position.set(20, 20, 30);
             camera.lookAt(0, 0, 0);
+
             // 场景
             const scene = new THREE.Scene();
             scene.background = new THREE.Color(0x051929);
+
             // 灯光
             const ambientLight = new THREE.AmbientLight(0x404040, 1);
             scene.add(ambientLight);
             const directionalLight = new THREE.DirectionalLight(0x00FFFF, 1);
             directionalLight.position.set(10, 20, 30);
             scene.add(directionalLight);
+
             // 渲染器
             const renderer = new THREE.WebGLRenderer({antialias: true});
             renderer.setSize(width, height);
             canvas.appendChild(renderer.domElement);
 
-            // 2. 先画一个简易的水声通信设备（发射端：圆柱形基阵，贴合你的论文）
+            // ===================== 2. 3D 模型（动态化） =====================
             // 设备主体：圆柱形（换能器基阵）
             const deviceGeo = new THREE.CylinderGeometry(2, 2, 5, 32);
-            const deviceMat = new THREE.MeshPhongMaterial({color: 0x00FFFF, emissive: 0x002244, emissiveIntensity: 0.8});
+            const deviceMat = new THREE.MeshPhongMaterial({
+                color: 0x00FFFF, 
+                emissive: 0x002244, 
+                emissiveIntensity: 0.8
+            });
             const device = new THREE.Mesh(deviceGeo, deviceMat);
             device.position.set(0, 2.5, 0);
             scene.add(device);
+
             // 设备底座
             const baseGeo = new THREE.CylinderGeometry(3, 3, 1, 32);
             const baseMat = new THREE.MeshPhongMaterial({color: 0x1E90FF});
@@ -98,7 +100,7 @@
             base.position.set(0, 0.5, 0);
             scene.add(base);
 
-            // 3. 画水下环境：简易海底平面
+            // 水下环境：海底平面
             const seaGeo = new THREE.PlaneGeometry(100, 100);
             const seaMat = new THREE.MeshPhongMaterial({color: 0x001122, side: THREE.DoubleSide});
             const sea = new THREE.Mesh(seaGeo, seaMat);
@@ -106,15 +108,154 @@
             sea.position.set(0, 0, 0);
             scene.add(sea);
 
-            // 4. 动画渲染循环
+            // 动态水流扰动效果（粒子系统模拟）
+            const createWaterParticles = () => {
+                const particlesGeo = new THREE.BufferGeometry();
+                const particlesCount = 500;
+                const posArray = new Float32Array(particlesCount * 3);
+
+                for(let i = 0; i < particlesCount * 3; i += 3) {
+                    posArray[i] = (Math.random() - 0.5) * 100;    // x
+                    posArray[i + 1] = Math.random() * 10;         // y (水下高度)
+                    posArray[i + 2] = (Math.random() - 0.5) * 100;// z
+                }
+
+                particlesGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+                const particlesMat = new THREE.PointsMaterial({
+                    color: 0x00FFFF,
+                    size: 0.1,
+                    transparent: true,
+                    opacity: 0.6
+                });
+                const particles = new THREE.Points(particlesGeo, particlesMat);
+                scene.add(particles);
+                return particles;
+            };
+            const waterParticles = createWaterParticles();
+
+            // ===================== 3. 动态数据仿真（核心） =====================
+            // 数据存储：用于图表绘制
+            const dataHistory = {
+                time: [],       // 时间轴
+                pl: [],         // 传播损失
+                ber: [],        // 误码率
+                maxLength: 30   // 最多显示30个数据点
+            };
+
+            // 水声信道模型：基于你的论文核心算法（简化版，可替换为真实算法）
+            const simulateUnderwaterChannel = () => {
+                // 基础参数（模拟动态变化）
+                const baseVoltage = 220;
+                const baseTemp = 30.5;
+                const baseDepth = 100;
+                const basePL = 65;
+                const baseDelay = 0.85;
+                const baseBER = 0.0025;
+
+                // 加入随机扰动（模拟海洋环境、设备状态变化）
+                return {
+                    voltage: (baseVoltage + (Math.random() - 0.5) * 2).toFixed(2),
+                    temperature: (baseTemp + (Math.random() - 0.5) * 3).toFixed(2),
+                    depth: (baseDepth + (Math.random() - 0.5) * 5).toFixed(2),
+                    pl: (basePL + (Math.random() - 0.5) * 10 + Math.sin(Date.now()/1000) * 5).toFixed(2),
+                    delayDiff: (baseDelay + (Math.random() - 0.5) * 0.2).toFixed(2),
+                    ber: (baseBER + (Math.random() - 0.5) * 0.001 + Math.cos(Date.now()/1000) * 0.0005).toFixed(4)
+                };
+            };
+
+            // 更新面板数值
+            const updatePanelData = (data) => {
+                document.getElementById('voltage').textContent = data.voltage;
+                document.getElementById('temperature').textContent = data.temperature;
+                document.getElementById('depth').textContent = data.depth;
+                document.getElementById('pl').textContent = data.pl;
+                document.getElementById('delayDiff').textContent = data.delayDiff;
+                document.getElementById('ber').textContent = data.ber;
+            };
+
+            // ===================== 4. ECharts 图表（实时更新） =====================
+            // 初始化图表1：传播损失曲线
+            const chart1 = echarts.init(document.getElementById('chart1'));
+            chart1.setOption({
+                title: { text: '通信传播损失实时曲线', textStyle: { color: '#87CEEB', fontSize: 12 } },
+                xAxis: { type: 'category', data: dataHistory.time, axisLabel: { color: '#fff' } },
+                yAxis: { type: 'value', axisLabel: { color: '#fff' }, name: 'dB', nameTextStyle: { color: '#87CEEB' } },
+                series: [{ name: '传播损失 (dB)', type: 'line', data: dataHistory.pl, itemStyle: { color: '#00FFFF' } }],
+                backgroundColor: 'transparent',
+                tooltip: { trigger: 'axis' }
+            });
+
+            // 初始化图表2：误码率曲线
+            const chart2 = echarts.init(document.getElementById('chart2'));
+            chart2.setOption({
+                title: { text: '通信误码率实时曲线', textStyle: { color: '#87CEEB', fontSize: 12 } },
+                xAxis: { type: 'category', data: dataHistory.time, axisLabel: { color: '#fff' } },
+                yAxis: { type: 'value', axisLabel: { color: '#fff' }, name: 'BER', nameTextStyle: { color: '#87CEEB' } },
+                series: [{ name: '误码率', type: 'line', data: dataHistory.ber, itemStyle: { color: '#00FF99' } }],
+                backgroundColor: 'transparent',
+                tooltip: { trigger: 'axis' }
+            });
+
+            // 更新图表数据
+            const updateCharts = (data) => {
+                // 时间戳（简化为秒数）
+                const time = (Date.now() / 1000).toFixed(0);
+                
+                // 维护数据长度
+                if (dataHistory.time.length >= dataHistory.maxLength) {
+                    dataHistory.time.shift();
+                    dataHistory.pl.shift();
+                    dataHistory.ber.shift();
+                }
+
+                // 添加新数据
+                dataHistory.time.push(time);
+                dataHistory.pl.push(Number(data.pl));
+                dataHistory.ber.push(Number(data.ber));
+
+                // 更新图表
+                chart1.setOption({
+                    xAxis: { data: dataHistory.time },
+                    series: [{ data: dataHistory.pl }]
+                });
+                chart2.setOption({
+                    xAxis: { data: dataHistory.time },
+                    series: [{ data: dataHistory.ber }]
+                });
+            };
+
+            // ===================== 5. 全局动画/数据循环 =====================
             function animate() {
                 requestAnimationFrame(animate);
-                device.rotation.y += 0.01; // 设备缓慢旋转，科技感
+
+                // 1. 3D场景动态效果
+                device.rotation.y += 0.01; // 设备旋转
+                waterParticles.rotation.y += 0.001; // 水流粒子缓慢旋转
+                // 设备发光强度随温度变化（状态反馈）
+                const temp = Number(document.getElementById('temperature').textContent);
+                deviceMat.emissiveIntensity = 0.5 + (temp - 29) / 5; // 温度越高，发光越强
+
+                // 2. 每500ms更新一次仿真数据（可调整频率）
+                if (Date.now() % 500 < 16) { // 约每500ms触发一次
+                    const channelData = simulateUnderwaterChannel();
+                    updatePanelData(channelData);
+                    updateCharts(channelData);
+                }
+
                 renderer.render(scene, camera);
             }
             animate();
 
-            // 后续在这里加：仿真数据生成、水声信道模型、ECharts图表、数据驱动更新
+            // 窗口自适应
+            window.addEventListener('resize', () => {
+                const newWidth = canvas.clientWidth;
+                const newHeight = canvas.clientHeight;
+                camera.aspect = newWidth / newHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(newWidth, newHeight);
+                chart1.resize();
+                chart2.resize();
+            });
         }
     </script>
 </body>
